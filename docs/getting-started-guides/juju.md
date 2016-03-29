@@ -36,27 +36,32 @@ Juju dependencies for your platform.
 
 ### With Docker
 
+If you are not using Ubuntu or prefer the isolation of Docker, you may
+run the following:
+
 > While this is a common target, the charmbox flavors of images are
 > unofficial, and should be treated as Experimental. If you encounter any issues
 > turning up the Kubernetes cluster with charmbox, please file a bug on the
 > respective issue tracker [here](https://github.com/juju-solutions/charmbox/issues)
-
-If you are not using Ubuntu or prefer the isolation of Docker, you may
-run the following:
 
 ```shell
 mkdir ~/.juju2
 sudo docker run -v ~/.juju2:/home/ubuntu/.local/share/juju -ti jujusolutions/charmbox:devel
 ```
 
-At this point from either path you will have access to the `juju
-bootstrap` command. However we will need to configure the credentials for the
- Juju cloud provider before we can proceed.
+### Configure Juju to point a cloud
 
-To set up the credentials for your chosen cloud see the [cloud setup docs](https://jujucharms.com/docs/devel/getting-started#2.-choose-a-cloud):
+At this point you have access to the Juju client. If you wish to use a cloud,
+you need to configure the credentials for the Juju cloud provider.
 
-Once your cloud has been bootstrapped via:
-`juju bootstrap $cloudname $cloudtype` you are ready to launch the cluster.
+Juju supports a wide variety of public clouds to set up the credentials for
+your chosen cloud see the
+[cloud setup page](https://jujucharms.com/docs/devel/getting-started#2.-choose-a-cloud).
+
+After configuration is complete test your setup with a `juju bootstrap`
+command:  
+`juju bootstrap $cloudname $cloudtype` you are ready to launch the
+Kubernetes cluster.
 
 ## Launch Kubernetes cluster
 
@@ -75,15 +80,14 @@ Next it will deploy the kubernetes application, 3 units of etcd, and network
 the units with flannel based Software Defined Networking (SDN) so containers
 on different hosts can communicate with each other.
 
-
 ## Exploring the cluster
 
 The `juju status` command provides information about each unit in the cluster:
 
 ```shell
-$ juju status --format=oneline
+$ juju status
 
-... (snipped for brevity)
+... (omitted for brevity)
 
 [Units]
 ID           WORKLOAD-STATE AGENT-STATE VERSION   MACHINE PORTS             PUBLIC-ADDRESS MESSAGE
@@ -91,24 +95,29 @@ etcd/0       active         idle        2.0-beta2 1                         54.1
 kubernetes/0 active         idle        2.0-beta2 2       6443/tcp,8088/tcp 54.205.204.227 Kubernetes follower running
 kubernetes/1 active         idle        2.0-beta2 3       6443/tcp,8088/tcp 54.145.57.114  Kubernetes leader running
 
-... (snipped for brevity)
+... (omitted for brevity)
 ```
-
 
 ## Run some containers!
 
-`kubectl` is available on the Kubernetes leader node. We'll fetch the kubectl
-command, and execute some queries against our newly stood up cluster.
+The `kubectl` file, the TLS certificates along with the configuration are
+all available on the Kubernetes leader unit. Fetch the kubectl package so you
+can run commands on the new Kuberntetes cluster.
 
+Use the `juju status` command to figure out which Kubernetes unit is the leader
+and copy the file from the leader:  
 
 ```shell
 juju scp kubernetes/1:kubectl_package.tar.gz .
 tar xvfz kubectl_package.tar.gz
+kubectl --config config get pods
 ```
 
-If you are not on a linux amd64 host system, you will need to fetch a kubectl
+If you are not on a Linux amd64 host system, you will need to find or build a
+kubectl binary package for your architecture.
 
-
+Put the config file in the home directory so you don't have to specify it on
+the command line each time. The default location is `${HOME}/.kube/config`.
 
 No pods will be available before starting a container:
 
@@ -159,8 +168,7 @@ kubectl get pods
 ```
 
 To test the hello app, we need to locate which node is hosting
-the container. Better tooling for using Juju to introspect container
-is in the works but we can use `juju run` and `juju status` to find
+the container. We can use `juju run` and `juju status` commands to find
 our hello app.
 
 Exit out of our ssh session and run:
@@ -197,28 +205,41 @@ We can add node units like so:
 juju add-unit kubernetes
 ```
 
+Or multiple units at one time:
+
+```shell
+juju add-unit -n3 kubernetes
+```
 
 ## Tear down cluster
+
+We recommend that you use the `kube-down.sh` command when you are done using
+the cluster, as it properly brings down the cloud and removes some of the
+build directories.
 
 ```shell
 ./kube-down.sh
 ```
 
-or destroy your current Juju environment (using the `juju env` command):
+If you want stop the servers you can destroy your current Juju environment
+(using the `juju env` command):
 
 ```shell
 juju destroy-environment --force `juju env`
 ```
 
-
 ## More Info
 
-The Kubernetes charms and bundles can be found in the `kubernetes` project on
-github.com:
+Juju works with charms and bundles to deploy solutions. The code that stands up
+a Kubernetes cluster is done in the charm code. The charm is built from using
+a layered approach to keep the code smaller and more focused on the operations
+of Kubernetes.
 
- - [Bundle Repository](http://releases.k8s.io/{{page.githubbranch}}/cluster/juju/bundles)
-   * [Kubernetes master charm](https://releases.k8s.io/{{page.githubbranch}}/cluster/juju/charms/trusty/kubernetes-master)
-   * [Kubernetes node charm](https://releases.k8s.io/{{page.githubbranch}}/cluster/juju/charms/trusty/kubernetes)
+The Kubernetes layer and bundles can be found in the `kubernetes`
+project on github.com:
+
+ - [Bundle location](https://github.com/kubernetes/kubernetes/tree/master/cluster/juju/bundles)
+ - [Kubernetes charm layer location](https://github.com/kubernetes/kubernetes/tree/master/cluster/juju/layers/kubernetes)
  - [More about Juju](https://jujucharms.com)
 
 
@@ -236,5 +257,11 @@ works with [Amazon Web Service](https://jujucharms.com/docs/stable/config-aws),
 [Vagrant](https://jujucharms.com/docs/stable/config-vagrant), and
 [Vmware vSphere](https://jujucharms.com/docs/stable/config-vmware).
 
-If you do not see your favorite cloud provider listed many clouds can be
-configured for [manual provisioning](https://jujucharms.com/docs/stable/config-manual).
+If you do not see your favorite cloud provider listed many clouds with ssh
+access can be configured for
+[manual provisioning](https://jujucharms.com/docs/stable/config-manual).
+
+The Juju Kubernetes work is curated by a very small group of community members.
+Let us know how we are doing. If you find any problems please open an
+[issue at the kubernetes project](https://github.com/kubernetes/kubernetes/issues)
+and tag it with "juju" so we can find it. 
